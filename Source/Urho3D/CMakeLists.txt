@@ -36,6 +36,8 @@ macro (define_engine_source_files)
             Graphics/Direct3D11/D3D11GraphicsImpl.h
             Graphics/GraphicsImpl.h
             Graphics/OpenGL/OGLGraphicsImpl.h
+            Graphics/Diligent/DiligentGraphicsImpl.cpp
+            Graphics/Diligent/DiligentGraphicsImpl.h
             IK/IKConverters.h
         )
         list (APPEND HEADER_FILES ${_files})
@@ -59,6 +61,8 @@ if (NOT MINI_URHO)
         define_engine_source_files (Graphics/OpenGL)
     elseif (URHO3D_D3D11)
         define_engine_source_files (Graphics/Direct3D11)
+    elseif (URHO3D_DILIGENT)
+        define_engine_source_files (Graphics/Diligent)
     endif ()
 else ()
     # URHO_MINI is a reduced version of library meant for native tools. Scripting is not needed.
@@ -115,6 +119,8 @@ if (NOT URHO3D_COMPUTE)
     list(REMOVE_ITEM SOURCE_FILES
         Graphics/Direct3D11/D3D11ComputeBuffer.cpp
         Graphics/Direct3D11/D3D11ComputeDevice.cpp
+        Graphics/Diligent/DiligentComputeBuffer.cpp
+        Graphics/Diligent/DiligentComputeDevice.cpp
         Graphics/OpenGL/OGLComputeBuffer.cpp
         Graphics/OpenGL/OGLComputeDevice.cpp
         Graphics/ComputeBuffer.cpp
@@ -176,7 +182,7 @@ if (NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/librevision.h)
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_QUIET ERROR_QUIET)
 endif ()
 
-# Link dependencies
+# Public dependencies (users may use them in their projects)
 set (THIRD_PARTY_DEPENDENCIES
     FreeType
     LZ4
@@ -202,20 +208,42 @@ set (THIRD_PARTY_DEPENDENCIES
     fmt
     spdlog
     EASTL
-    entt
     ETCPACK
     xatlas
     embree
     RmlUi
     glslang
+    tinygltf
     SPIRV
     spirv-cross-core
     spirv-cross-glsl
     spirv-cross-msl
     spirv-cross-hlsl
+    Diligent-GraphicsEngineOpenGL-static
+    Diligent-GraphicsEngineVk-static
+    Diligent-Common
+    Diligent-HLSL2GLSLConverterLib
+    SPIRV-Reflect
     tinygltf
     enkiTS
 )
+
+# LibCpuId does not work on M1 Mac
+if (APPLE AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
+    message("LibCpuId is not compatible with Mac M1, LibCpuId has been disabled.")
+    list (REMOVE_ITEM THIRD_PARTY_DEPENDENCIES LibCpuId)
+endif ()
+
+if (WIN32)
+    list (APPEND THIRD_PARTY_DEPENDENCIES Diligent-GraphicsEngineD3D11-static Diligent-GraphicsEngineD3D12-static)
+endif ()
+if (APPLE)
+    list (APPEND THIRD_PARTY_DEPENDENCIES Diligent-GraphicsEngineMetal-static)
+endif ()
+
+if (URHO3D_DILIGENT)
+    list (APPEND THIRD_PARTY_DEPENDENCIES SPIRV-Tools-opt)
+endif ()
 
 if (URHO3D_MERGE_STATIC_LIBS)
     list (APPEND THIRD_PARTY_DEPENDENCIES Bullet)
@@ -238,7 +266,8 @@ foreach (dep ${THIRD_PARTY_DEPENDENCIES})
         if (${_TARGET_TYPE} STREQUAL "STATIC_LIBRARY")
             if (BUILD_SHARED_LIBS)
                 if (MSVC)
-                    set_property(TARGET Urho3D APPEND_STRING PROPERTY LINK_FLAGS " /WHOLEARCHIVE:${dep}")
+                    # TODO: translate target name to file name or remove debug suffixes from glslangd at least
+                    #set_property(TARGET Urho3D APPEND_STRING PROPERTY LINK_FLAGS " /WHOLEARCHIVE:${dep}")
                 elseif (APPLE)
                     set_property(TARGET Urho3D APPEND PROPERTY LINK_LIBRARIES -force_load ${dep})
                 endif ()
@@ -343,6 +372,30 @@ if (NOT MINI_URHO)
         else ()
             target_link_libraries (Urho3D PUBLIC GL)
         endif ()
+    elseif(URHO3D_DILIGENT)
+        if (WIN32)
+            find_package(DirectX REQUIRED D3D11)
+        endif ()
+
+        if (!Vulkan_LIBRARIES)
+            find_package(Vulkan REQUIRED Vulkan)
+        endif ()
+
+        set (LINK_LIBRARIES ${Vulkan_LIBRARIES})
+        set (HEADER_LIBRARIES ${Vulkan_INCLUDE_DIR})
+
+        if (${OPENGL_INCLUDE_DIR})
+            list (APPEND HEADER_LIBRARIES ${OPENGL_INCLUDE_DIR})
+        endif ()
+        if(${OPENGL_LIBRARY})
+            list(APPEND LINK_LIBRARIES ${OPENGL_LIBRARY})
+        endif ()
+
+        if (WIN32)
+            list (APPEND LINK_LIBRARIES ${DIRECT3D_LIBRARIES} d3d12.lib)
+        endif ()
+        target_link_libraries(Urho3D PUBLIC ${LINK_LIBRARIES})
+        target_include_directories(Urho3D PUBLIC ${HEADER_LIBRARIES})
     else ()
         find_package(DirectX REQUIRED D3D11)
         target_link_libraries (Urho3D PUBLIC ${DIRECT3D_LIBRARIES})
@@ -372,7 +425,7 @@ if (BUILD_SHARED_LIBS)
         PRIVATE -DURHO3D_EXPORTS=1 -DAL_EXPORTS=1 -DBOX2D_EXPORTS=1 -DCIVETWEB_DLL_EXPORTS=1 -DEASTL_EXPORTS=1
             -DEASTDC_EXPORTS=1 -DURHO3D_EXPORTS=1 -DFMT_EXPORT=1 -DGLEW_BUILD=1 -DIMGUI_EXPORTS=1
             -DLZ4_DLL_EXPORT=1 -DNFD_EXPORTS=1 -DPUGIXML_EXPORTS=1 -DSDL_EXPORTS=1 -DTRACY_EXPORTS=1 -DRmlCore_EXPORTS=1
-            -DRmlDebugger_EXPORTS=1
+            -DRmlDebugger_EXPORTS=1 -DGLSLANG_EXPORTING=1
     )
 else ()
     target_compile_definitions (Urho3D PUBLIC -DURHO3D_STATIC)

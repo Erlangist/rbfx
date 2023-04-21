@@ -30,11 +30,14 @@
 #include "../Graphics/Shader.h"
 #include "../Resource/ResourceEvents.h"
 
+#include "../IO/VirtualFileSystem.h"
+#include "../Engine/EngineEvents.h"
+
 #include "../DebugNew.h"
 
 namespace Urho3D
 {
-
+    static ea::string sPipelineStateCacheFileId = "PSCB";
 GeometryBufferArray::GeometryBufferArray(const Geometry* geometry, VertexBuffer* instancingBuffer)
     : GeometryBufferArray(geometry->GetVertexBuffers(), geometry->GetIndexBuffer(), instancingBuffer)
 {
@@ -72,6 +75,9 @@ void PipelineStateDesc::InitializeInputLayoutAndPrimitiveType(const Geometry* ge
 PipelineState::PipelineState(PipelineStateCache* owner)
     : owner_(owner)
 {
+#ifdef URHO3D_DILIGENT
+    pipeline_ = nullptr;
+#endif
 }
 
 PipelineState::~PipelineState()
@@ -82,8 +88,17 @@ PipelineState::~PipelineState()
         return;
     }
 
+    // Release all allocated shader resource bindings
+    shaderResourceBindings_.clear();
+
     if (PipelineStateCache* owner = owner_)
         owner->ReleasePipelineState(desc_);
+}
+
+ShaderResourceBinding* PipelineState::CreateSRB() {
+    ShaderResourceBinding* srb = CreateInternalSRB();
+    shaderResourceBindings_.push_back(SharedPtr<ShaderResourceBinding>(srb));
+    return srb;
 }
 
 void PipelineState::Setup(const PipelineStateDesc& desc)
@@ -103,8 +118,9 @@ void PipelineState::RestoreCachedState(Graphics* graphics)
         shaderProgramLayout_ = graphics->GetShaderProgramLayout(desc_.vertexShader_, desc_.pixelShader_);
 }
 
-void PipelineState::Apply(Graphics* graphics)
+bool PipelineState::Apply(Graphics* graphics)
 {
+#ifndef URHO3D_DILIGENT
     graphics->SetShaders(desc_.vertexShader_, desc_.pixelShader_);
 
     graphics->SetDepthWrite(desc_.depthWriteEnabled_);
@@ -120,13 +136,66 @@ void PipelineState::Apply(Graphics* graphics)
 
     graphics->SetColorWrite(desc_.colorWriteEnabled_);
     graphics->SetBlendMode(desc_.blendMode_, desc_.alphaToCoverageEnabled_);
+    return true;
+#else
+    if (!BuildPipeline(graphics))
+        return false;
+    graphics->SetPipelineState(this);
+    return true;
+#endif
 }
 
 PipelineStateCache::PipelineStateCache(Context* context)
     : Object(context)
-    , GPUObject(GetSubsystem<Graphics>())
+    , GPUObject(GetSubsystem<Graphics>()),
+    init_(false)
 {
     SubscribeToEvent(E_RELOADFINISHED, &PipelineStateCache::HandleResourceReload);
+}
+void PipelineStateCache::Init()
+{
+    if (this->init_) {
+        URHO3D_LOGWARNING("PipelineStateCache has already initialized. Skipping then!");
+        return;
+    }
+    const VirtualFileSystem* vfs = GetSubsystem<VirtualFileSystem>();
+    ea::vector<uint8_t> fileData;
+    if (vfs->Exists(cacheDir_)) {
+        const AbstractFilePtr file = vfs->OpenFile(cacheDir_, FILE_READ);
+        // PSCB = Pipeline State Cache Binary
+        if (!file || file->ReadFileID() != sPipelineStateCacheFileId) {
+            URHO3D_LOGERROR("{} is not a valid pipeline state cache binary file", cacheDir_.ToUri());
+        }
+        else {
+            file->ReadBuffer(fileData);
+            URHO3D_LOGDEBUG("Loaded Pipeline State Cache ({:d})", fileData.size());
+        }
+    }
+#ifdef URHO3D_DILIGENT
+    CreatePSOCache(fileData);
+#endif
+
+    this->init_ = true;
+}
+
+void PipelineStateCache::Save()
+{
+    if(!this->init_)
+        return;
+    ByteVector psoData;
+#ifdef URHO3D_DILIGENT
+    ReadPSOData(psoData);
+#endif
+
+    VirtualFileSystem* vfs = GetSubsystem<VirtualFileSystem>();
+
+    auto file = vfs->OpenFile(cacheDir_, FILE_WRITE);
+    if (!file)
+        return;
+
+    file->WriteFileID(sPipelineStateCacheFileId);
+    file->WriteBuffer(psoData);
+    URHO3D_LOGDEBUG("Pipeline State Cache has been saved ({:d}).", psoData.size());
 }
 
 SharedPtr<PipelineState> PipelineStateCache::GetPipelineState(PipelineStateDesc desc)
@@ -187,6 +256,11 @@ void PipelineStateCache::HandleResourceReload(StringHash /*eventType*/, VariantM
                 pipelineState->RestoreCachedState(graphics_);
         }
     }
+}
+
+void PipelineStateCache::SetCacheDir(const FileIdentifier& path) {
+    assert(!init_);
+    cacheDir_ = path;
 }
 
 }

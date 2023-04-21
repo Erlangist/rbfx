@@ -34,12 +34,21 @@ namespace Urho3D
 class ConstantBuffer;
 class Vector3;
 
-// Graphics capability support level. Web platform (Emscripten) also uses OpenGL ES, but is considered a desktop platform capability-wise
-#if defined(IOS) || defined(TVOS) || defined(__ANDROID__) || defined(__arm__) || defined(__aarch64__)
+// Graphics capability support level. Web platform (Emscripten) also uses OpenGL ES, but is considered a desktop platform capability-wise.
+#if defined(IOS) || defined(TVOS) || defined(__ANDROID__) || defined(__arm__) || (defined(__aarch64__) && !defined(MACOS))
 #define MOBILE_GRAPHICS
 #else
 #define DESKTOP_GRAPHICS
 #endif
+
+///
+enum RenderBackend {
+    RENDER_D3D11 = 0,
+    RENDER_D3D12,
+    RENDER_GL,
+    RENDER_VULKAN,
+    RENDER_METAL
+};
 
 /// Primitive type.
 enum PrimitiveType
@@ -191,7 +200,8 @@ struct URHO3D_API VertexElement
         semantic_(SEM_POSITION),
         index_(0),
         perInstance_(false),
-        offset_(0)
+        offset_(0),
+        location_(0)
     {
     }
 
@@ -201,7 +211,8 @@ struct URHO3D_API VertexElement
         semantic_(semantic),
         index_(index),
         perInstance_(perInstance),
-        offset_(0)
+        offset_(0),
+        location_(0)
     {
     }
 
@@ -233,6 +244,8 @@ struct URHO3D_API VertexElement
     bool perInstance_;
     /// Offset of element from vertex start. Filled by VertexBuffer once the vertex declaration is built.
     unsigned offset_;
+    /// Location of element, used by Diligent on OpenGL
+    unsigned location_;
 };
 
 /// Sizes of vertex element types.
@@ -345,6 +358,41 @@ enum ShaderParameterGroup
     SP_CUSTOM,
     MAX_SHADER_PARAMETER_GROUPS
 };
+static const char* shaderParameterGroupNames[] = {
+    "Frame",
+    "Camera",
+    "Zone",
+    "Light",
+    "Material",
+    "Object",
+    "Custom",
+    nullptr,
+};
+
+#ifdef URHO3D_DILIGENT
+//TODO: Refactor ShaderVariant to use this
+static const char* elementSemanticNames[] = {
+    "POSITION",
+    "NORMAL",
+    "BINORMAL",
+    "TANGENT",
+    "TEXCOORD",
+    "COLOR",
+    "BLENDWEIGHT",
+    "BLENDINDICES",
+    "OBJECTINDEX",
+    nullptr
+};
+static ea::unordered_map<ea::string, ShaderParameterGroup> constantBuffersNamesLookup = {
+    { "Frame", ShaderParameterGroup::SP_FRAME },
+    { "Camera", ShaderParameterGroup::SP_CAMERA },
+    { "Zone", ShaderParameterGroup::SP_ZONE },
+    { "Light", ShaderParameterGroup::SP_LIGHT },
+    { "Material", ShaderParameterGroup::SP_MATERIAL },
+    { "Object", ShaderParameterGroup::SP_OBJECT },
+    { "Custom", ShaderParameterGroup::SP_CUSTOM }
+};
+#endif
 
 /// Texture units.
 /// @manualbind
@@ -540,4 +588,16 @@ static const int MAX_VERTEX_STREAMS = 4;
 static const int MAX_CONSTANT_REGISTERS = 256;
 
 static const int BITS_PER_COMPONENT = 8;
+
+#ifdef URHO3D_DEBUG
+    static ea::string ConstantBufferDebugNames[] = {
+        "FrameCB",
+        "CameraCB",
+        "ZoneCB",
+        "LightCB",
+        "MaterialCB",
+        "ObjectCB",
+        "CustomCB"
+    };
+#endif
 }

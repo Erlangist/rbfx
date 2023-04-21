@@ -24,9 +24,9 @@
 
 #include "../Core/Context.h"
 #include "../Graphics/Graphics.h"
+#include "../Graphics/GraphicsEvents.h"
 #include "../Graphics/ConstantBuffer.h"
 #include "../IO/Log.h"
-
 #include "../DebugNew.h"
 
 namespace Urho3D

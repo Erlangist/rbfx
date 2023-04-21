@@ -30,7 +30,9 @@
 #include "../Graphics/PipelineState.h"
 #include "../Graphics/ShaderParameterCollection.h"
 #include "../Graphics/ConstantBufferCollection.h"
+#include "../Graphics/ShaderResourceBindingCache.h"
 #include "../IO/Log.h"
+#include "../Graphics/ConstantBufferManager.h"
 
 namespace Urho3D
 {
@@ -75,6 +77,10 @@ struct DrawCommandDescription
 
     ShaderResourceRange shaderResources_;
 
+#ifdef URHO3D_DILIGENT
+    /// Constant Buffer Ticket
+    ea::array<unsigned, MAX_SHADER_PARAMETER_GROUPS> cbufferTicketIds_;
+#endif
     /// Index of scissor rectangle. 0 if disabled.
     unsigned scissorRect_{};
 
@@ -123,6 +129,34 @@ public:
     /// Begin shader parameter group. All parameters shall be set for each draw command.
     bool BeginShaderParameterGroup(ShaderParameterGroup group, bool differentFromPrevious = false)
     {
+#ifdef URHO3D_DILIGENT
+        if (useConstantBuffers_) {
+            const unsigned groupLayoutHash = constantBuffers_.currentLayout_->GetConstantBufferHash(group);
+            const unsigned size = constantBuffers_.currentLayout_->GetConstantBufferSize(group);
+            ConstantBufferManagerTicket* ticket = cbufferManager_->GetTicket(group, size);
+            currentCBufferTicket_ = ticket;
+            if (!ticket)
+                return false;
+            // If constant buffer for this group is currently disabled...
+            if (groupLayoutHash == 0)
+            {
+                // If contents changed, forget cached constant buffer
+                if (differentFromPrevious)
+                    constantBuffers_.currentHashes_[group] = 0;
+                return false;
+            }
+            // If data or layout changes, acquire new ticket
+            if (differentFromPrevious || groupLayoutHash != constantBuffers_.currentHashes_[group])
+            {
+                constantBuffers_.currentData_ = ticket->GetPointerData();
+                constantBuffers_.currentHashes_[group] = groupLayoutHash;
+                constantBuffers_.currentGroup_ = group;
+                return true;
+            }
+
+        }
+        return false;
+#else
         if (useConstantBuffers_)
         {
             const unsigned groupLayoutHash = constantBuffers_.currentLayout_->GetConstantBufferHash(group);
@@ -158,6 +192,7 @@ public:
             const bool groupInitialized = groupRange.first != groupRange.second;
             return differentFromPrevious || !groupInitialized;
         }
+#endif
     }
 
     /// Add shader parameter. Shall be called only if BeginShaderParameterGroup returned true.
@@ -196,8 +231,12 @@ public:
     {
         if (useConstantBuffers_)
         {
+#ifdef URHO3D_DILIGENT
+            currentDrawCommand_.cbufferTicketIds_[group] = currentCBufferTicket_->GetId();
+#endif
             // All data is already stored, nothing to do
             constantBuffers_.currentGroup_ = MAX_SHADER_PARAMETER_GROUPS;
+
         }
         else
         {
@@ -250,6 +289,9 @@ public:
         currentDrawCommand_.baseVertexIndex_ = 0;
         currentDrawCommand_.instanceStart_ = 0;
         currentDrawCommand_.instanceCount_ = 0;
+        // fix: don't push command if index start and index count is 0
+        if (indexStart == 0 && indexCount == 0)
+            return;
         drawCommands_.push_back(currentDrawCommand_);
     }
 
@@ -336,6 +378,13 @@ private:
     DrawCommandDescription currentDrawCommand_;
     /// Current shader resource group.
     ShaderResourceRange currentShaderResourceGroup_;
+
+    /// Current Constant Buffer 
+    ConstantBufferManagerTicket* currentCBufferTicket_;
+    /// Shader Resource Binding Cache.
+    SharedPtr<ShaderResourceBindingCache> srbCache_;
+    /// Constant Buffer Manager
+    WeakPtr<ConstantBufferManager> cbufferManager_;
 };
 
 }

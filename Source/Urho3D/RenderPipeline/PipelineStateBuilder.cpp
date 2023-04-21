@@ -124,7 +124,11 @@ SharedPtr<PipelineState> PipelineStateBuilder::CreateBatchPipelineState(
 
         compositor_->ProcessUserBatch(shaderProgramDesc_, batchCompositorPass->GetFlags(),
             key.drawable_, key.geometry_, key.geometryType_, key.material_, key.pass_, light, hasShadow, subpass);
+#ifdef  URHO3D_DEBUG
+        pipelineStateDesc_.debugName_ = Format("DrawablePipeline({})",key.material_->GetName());
+#endif
         SetupUserPassState(key.drawable_, key.material_, key.pass_, lightMaskToStencil);
+
 
         // Support negative lights
         if (light && light->IsNegative())
@@ -156,11 +160,17 @@ void PipelineStateBuilder::SetupShadowPassState(unsigned splitIndex, const Light
     const float biasMultiplier = lightParams.shadowDepthBiasMultiplier_[splitIndex];
     const BiasParameters& biasParameters = lightProcessor->GetLight()->GetShadowBias();
 
+#ifdef URHO3D_DEBUG
+    pipelineStateDesc_.debugName_ = Format("ShadowPass({})|Split: {}", pass->GetName(), splitIndex);
+#endif
     if (shadowMapAllocator_->GetSettings().enableVarianceShadowMaps_)
     {
         pipelineStateDesc_.colorWriteEnabled_ = true;
         pipelineStateDesc_.constantDepthBias_ = 0.0f;
         pipelineStateDesc_.slopeScaledDepthBias_ = 0.0f;
+#ifdef URHO3D_DILIGENT
+        pipelineStateDesc_.depthStencilFormat_ = Graphics::GetRGFloat32Format();
+#endif
     }
     else
     {
@@ -174,18 +184,26 @@ void PipelineStateBuilder::SetupShadowPassState(unsigned splitIndex, const Light
         desc.constantDepthBias_ = desc.constantDepthBias_ * multiplier + addition;
         desc.slopeScaledDepthBias_ *= multiplier;
 #endif
+#ifdef URHO3D_DILIGENT
+        pipelineStateDesc_.depthStencilFormat_ = shadowMapAllocator_->GetSettings().use16bitShadowMaps_
+            ? graphics_->GetShadowMapFormat()
+            : graphics_->GetHiresShadowMapFormat();
+#endif
     }
 
     pipelineStateDesc_.depthWriteEnabled_ = pass->GetDepthWrite();
     pipelineStateDesc_.depthCompareFunction_ = pass->GetDepthTestMode();
 
     pipelineStateDesc_.cullMode_ = GetEffectiveCullMode(pass->GetCullMode(), material->GetShadowCullMode(), false);
+
 }
 
 void PipelineStateBuilder::SetupLightVolumePassState(const LightProcessor* lightProcessor)
 {
     const Light* light = lightProcessor->GetLight();
-
+#if defined URHO3D_DEBUG && defined URHO3D_DILIGENT
+    pipelineStateDesc_.debugName_ = "LightVolumePass";
+#endif
     pipelineStateDesc_.colorWriteEnabled_ = true;
     pipelineStateDesc_.blendMode_ = light->IsNegative() ? BLEND_SUBTRACT : BLEND_ADD;
 
@@ -217,6 +235,12 @@ void PipelineStateBuilder::SetupLightVolumePassState(const LightProcessor* light
 void PipelineStateBuilder::SetupUserPassState(const Drawable* drawable,
     const Material* material, const Pass* pass, bool lightMaskToStencil)
 {
+    #ifdef URHO3D_DILIGENT
+    // TODO: Change this or refactor code in a deal way
+    pipelineStateDesc_.renderTargetsFormats_.resize(1);
+    pipelineStateDesc_.renderTargetsFormats_[0] = graphics_->GetRGBAFormat();
+    pipelineStateDesc_.depthStencilFormat_ = graphics_->GetSwapChainDepthFormat();
+    #endif
     pipelineStateDesc_.depthWriteEnabled_ = pass->GetDepthWrite();
     pipelineStateDesc_.depthCompareFunction_ = pass->GetDepthTestMode();
 

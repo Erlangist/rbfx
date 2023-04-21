@@ -26,8 +26,13 @@
 #include "../Core/Object.h"
 #include "../Graphics/GraphicsDefs.h"
 #include "../Graphics/ShaderDefineArray.h"
+#include "../Container/ByteVector.h"
 
 #include <EASTL/optional.h>
+
+#ifdef URHO3D_DILIGENT
+#include <Diligent/Graphics/GraphicsEngine/interface/Shader.h>
+#endif
 
 namespace Urho3D
 {
@@ -39,7 +44,11 @@ ea::optional<ea::pair<unsigned, unsigned>> FindVersionTag(ea::string_view shader
 /// Convert GLSL shader to HLSL5.
 bool ConvertShaderToHLSL5(ShaderType shaderType, const ea::string& sourceCode, const ShaderDefineArray& shaderDefines,
     ea::string& outputShaderCode, ea::string& errorMessage);
-
+bool CompileGLSLToSpirV(ShaderType shaderType, const ea::string& sourceCode, const ShaderDefineArray& shaderDefines,
+    ea::vector<unsigned>& outputByteCode, ea::string& errorMessage);
 #endif
-
+#ifdef URHO3D_DILIGENT
+bool ConvertShaderToHLSL5(const ea::vector<unsigned>& byteCode, ea::string& outputShaderCode, ea::string& errorMessage);
+bool ConvertSPIRVToGLSL(const ea::vector<unsigned>& byteCode, ea::string& outputShaderCode, ea::string& errorMessage);
+#endif
 }

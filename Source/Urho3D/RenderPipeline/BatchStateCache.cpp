@@ -130,6 +130,9 @@ SharedPtr<PipelineState> DefaultUIBatchStateCache::CreateUIBatchPipelineState(
     Renderer* renderer = GetSubsystem<Renderer>();
 
     PipelineStateDesc desc;
+#ifdef URHO3D_DEBUG
+    desc.debugName_ = "UI Batch Pipeline - "+key.material_->GetName();
+#endif
     desc.InitializeInputLayout(GeometryBufferArray{ { ctx.vertexBuffer_ }, ctx.indexBuffer_, nullptr });
     desc.primitiveType_ = TRIANGLE_LIST;
     desc.colorWriteEnabled_ = true;
@@ -140,6 +143,12 @@ SharedPtr<PipelineState> DefaultUIBatchStateCache::CreateUIBatchPipelineState(
     desc.stencilTestEnabled_ = false;
     desc.blendMode_ = key.blendMode_;
     desc.scissorTestEnabled_ = true;
+#ifdef URHO3D_DILIGENT
+    // UI renders directly to backbuffer
+    desc.renderTargetsFormats_.resize(1);
+    desc.renderTargetsFormats_[0] = graphics->GetSwapChainRTFormat();
+    desc.depthStencilFormat_ = graphics->GetSwapChainDepthFormat();
+#endif
 
     vertexShaderDefines_ = key.pass_->GetEffectiveVertexShaderDefines();
     pixelShaderDefines_ = key.pass_->GetEffectivePixelShaderDefines();
