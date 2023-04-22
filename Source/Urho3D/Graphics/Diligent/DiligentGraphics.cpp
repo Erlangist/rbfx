@@ -44,6 +44,12 @@
 #include "../../Resource/ResourceCache.h"
 #include "../../Graphics/ShaderResourceBinding.h"
 #include "../../Graphics/PipelineState.h"
+#include "../../Input/Input.h"
+#include "../../UI/Cursor.h"
+#include "../../UI/UI.h"
+#ifdef URHO3D_RMLUI
+    #include "../../RmlUI/RmlUI.h"
+#endif
 
 #include <EASTL/utility.h>
 
@@ -112,6 +118,11 @@ using namespace Platform;
 #include <SDL_metal.h>
 #endif
 
+#ifdef PLATFORM_EMSCRIPTEN
+#include <emscripten/emscripten.h>
+#include <emscripten/bind.h>
+#endif
+
 #include "../../DebugNew.h"
 
 #ifdef _MSC_VER
@@ -124,6 +135,80 @@ extern "C"
 {
 __declspec(dllexport) DWORD NvOptimusEnablement = 1;
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+#endif
+
+#ifdef PLATFORM_EMSCRIPTEN
+static void JSCanvasSize(int width, int height, bool fullscreen, float scale)
+{
+    URHO3D_LOGINFOF("JSCanvasSize: width=%d height=%d fullscreen=%d ui scale=%f", width, height, fullscreen, scale);
+
+    using namespace Urho3D;
+
+    auto context = Context::GetInstance();
+    if (context)
+    {
+        bool uiCursorVisible = false;
+        bool systemCursorVisible = false;
+        MouseMode mouseMode{};
+
+        // Detect current system pointer state
+        Input* input = context->GetSubsystem<Input>();
+        if (input)
+        {
+            systemCursorVisible = input->IsMouseVisible();
+            mouseMode = input->GetMouseMode();
+        }
+
+        UI* ui = context->GetSubsystem<UI>();
+        if (ui)
+        {
+            ui->SetScale(scale);
+
+            // Detect current UI pointer state
+            Cursor* cursor = ui->GetCursor();
+            if (cursor)
+                uiCursorVisible = cursor->IsVisible();
+        }
+
+#ifdef URHO3D_RMLUI
+        if (RmlUI* ui = context->GetSubsystem<RmlUI>())
+            ui->SetScale(scale);
+#endif
+
+        // Apply new resolution
+        context->GetSubsystem<Graphics>()->SetMode(width, height);
+
+        // Reset the pointer state as it was before resolution change
+        if (input)
+        {
+            if (uiCursorVisible)
+                input->SetMouseVisible(false);
+            else
+                input->SetMouseVisible(systemCursorVisible);
+
+            input->SetMouseMode(mouseMode);
+        }
+
+        if (ui)
+        {
+            Cursor* cursor = ui->GetCursor();
+            if (cursor)
+            {
+                cursor->SetVisible(uiCursorVisible);
+
+                IntVector2 pos = input->GetMousePosition();
+                pos = ui->ConvertSystemToUI(pos);
+
+                cursor->SetPosition(pos);
+            }
+        }
+    }
+}
+
+using namespace emscripten;
+EMSCRIPTEN_BINDINGS(Module) {
+    function("JSCanvasSize", &JSCanvasSize);
 }
 #endif
 
@@ -268,8 +353,7 @@ static ANativeWindow* GetWindowHandle(SDL_Window* window)
 #elif defined (PLATFORM_EMSCRIPTEN)
 static const char* GetWindowHandle(SDL_Window* window)
 {
-    return nullptr;
-    //return "#canvas";
+    return "canvas";
 }
 #else
 static void GetWindowHandle() {
@@ -283,8 +367,8 @@ Graphics::Graphics(Context* context) :
     Object(context),
     impl_(new GraphicsImpl()),
     position_(SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED),
-    shaderPath_("Shaders/HLSL/"),
-    shaderExtension_(".hlsl"),
+    shaderPath_("Shaders/GLSL/"),
+    shaderExtension_(".glsl"),
     orientations_("LandscapeLeft LandscapeRight"),
     apiName_("Diligent")
 {
@@ -304,7 +388,7 @@ Graphics::~Graphics()
 {
     // Reset State
     impl_->deviceContext_->SetRenderTargets(0,nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    impl_->deviceContext_->SetPipelineState(nullptr);
+    //impl_->deviceContext_->SetPipelineState(nullptr);
     impl_->deviceContext_->SetIndexBuffer(nullptr, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     impl_->deviceContext_->SetVertexBuffers(0, 0, nullptr, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     

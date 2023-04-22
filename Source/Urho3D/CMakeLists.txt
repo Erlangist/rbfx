@@ -224,6 +224,7 @@ set (THIRD_PARTY_DEPENDENCIES
     Diligent-Common
     Diligent-HLSL2GLSLConverterLib
     SPIRV-Reflect
+    Vulkan-Headers
     tinygltf
     enkiTS
 )
@@ -377,12 +378,13 @@ if (NOT MINI_URHO)
             find_package(DirectX REQUIRED D3D11)
         endif ()
 
-        if (!Vulkan_LIBRARIES)
-            find_package(Vulkan REQUIRED Vulkan)
-        endif ()
-
-        set (LINK_LIBRARIES ${Vulkan_LIBRARIES})
-        set (HEADER_LIBRARIES ${Vulkan_INCLUDE_DIR})
+        # TODO(diligent): revisit this
+#        if (!Vulkan_LIBRARIES)
+#            find_package(Vulkan REQUIRED Vulkan)
+#        endif ()
+#
+#        set (LINK_LIBRARIES ${Vulkan_LIBRARIES})
+#        set (HEADER_LIBRARIES ${Vulkan_INCLUDE_DIR})
 
         if (${OPENGL_INCLUDE_DIR})
             list (APPEND HEADER_LIBRARIES ${OPENGL_INCLUDE_DIR})
