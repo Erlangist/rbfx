@@ -63,11 +63,13 @@
 #include <Diligent/Graphics/GraphicsEngineD3D12/interface/SwapChainD3D12.h>
 #endif
 // Vulkan includes
+#if VULKAN_SUPPORTED
 #include <vulkan/vulkan.h>
 #include <Diligent/Graphics/GraphicsEngineVulkan/interface/EngineFactoryVk.h>
 #include <Diligent/Graphics/GraphicsEngineVulkan/interface/RenderDeviceVk.h>
 #include <Diligent/Graphics/GraphicsEngineVulkan/interface/DeviceContextVk.h>
 #include <Diligent/Graphics/GraphicsEngineVulkan/interface/SwapChainVk.h>
+#endif
 // OpenGL includes
 #ifdef __APPLE__
 #include <OpenGL/gl.h>
@@ -264,9 +266,10 @@ static ANativeWindow* GetWindowHandle(SDL_Window* window)
     return sysInfo.info.android.window;
 }
 #elif defined (PLATFORM_EMSCRIPTEN)
-static const char* GetWindowHandle()
+static const char* GetWindowHandle(SDL_Window* window)
 {
-    return "#canvas";
+    return nullptr;
+    //return "#canvas";
 }
 #else
 static void GetWindowHandle() {
@@ -2341,6 +2344,7 @@ bool Graphics::CreateDevice(int width, int height)
         }
         break;
 #endif
+#if VULKAN_SUPPORTED
         case RENDER_VULKAN:
         {
             IEngineFactoryVk* factory = GetEngineFactoryVk();
@@ -2371,6 +2375,7 @@ bool Graphics::CreateDevice(int width, int height)
             );
             engineFactory = factory;
         }
+#endif
                 break;
         case RENDER_GL:
         {

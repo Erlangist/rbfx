@@ -418,6 +418,9 @@ if (WEB)
         math(EXPR EMSCRIPTEN_TOTAL_MEMORY_BYTES "${EMSCRIPTEN_TOTAL_MEMORY} * 1024 * 1024")
         target_link_libraries(Urho3D PUBLIC "-s INITIAL_MEMORY=${EMSCRIPTEN_TOTAL_MEMORY_BYTES}")
     endif ()
+    target_link_libraries(Urho3D PUBLIC "-s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2")
+    # TODO(diligent): Remove this once the issue is fixed
+    target_link_libraries(Urho3D PUBLIC "-s FULL_ES3=1")
 endif ()
 
 if (BUILD_SHARED_LIBS)

@@ -2,7 +2,8 @@
 #include "../Graphics/Diligent/DiligentLookupSettings.h"
 #include "../Graphics/ShaderConverter.h"
 #include <Diligent/Graphics/HLSL2GLSLConverterLib/include/HLSL2GLSLConverterImpl.hpp>
-#include <Diligent/Graphics/ShaderTools/include/SPIRVTools.hpp>
+// TODO(diligent): Revisit
+//#include <Diligent/Graphics/ShaderTools/include/SPIRVTools.hpp>
 #include <Diligent/Graphics/ShaderTools/include/GLSLangUtils.hpp>
 #include <Diligent/Graphics/GraphicsTools/interface/ShaderMacroHelper.hpp>
 #include <SPIRV-Reflect/spirv_reflect.h>
@@ -71,6 +72,7 @@ namespace Urho3D
     }
     bool ShaderProcessor::ProcessHLSL()
     {
+#if 0
 #ifdef WIN32
         ea::string sourceCode = desc_.sourceCode_;
         ea::string cbufferSuffix = "";
@@ -297,6 +299,8 @@ namespace Urho3D
         outputCode_ = sourceCode;
         return true;
 #endif
+#endif
+        return false;
     }
     bool ShaderProcessor::ProcessGLSL()
     {
@@ -445,14 +449,15 @@ namespace Urho3D
             compilerOutput_
         ))
             return false;
-        if (desc_.optimizeCode_) {
+        // TODO(diligent): Optimize SPIRV
+        /*if (desc_.optimizeCode_) {
             std::vector<unsigned> tmpByteCode = OptimizeSPIRV(std::vector<unsigned>(byteCode.begin(), byteCode.end()), SPV_ENV_OPENGL_4_0, SPIRV_OPTIMIZATION_FLAG_LEGALIZATION);
             if (tmpByteCode.size() == 0)
                 return false;
 
             byteCode.resize(tmpByteCode.size());
             memcpy(byteCode.data(), tmpByteCode.data(), tmpByteCode.size() * sizeof(unsigned));
-        }
+        }*/
 
         return true;
     }

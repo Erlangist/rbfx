@@ -115,6 +115,7 @@ namespace Urho3D
 
     bool ShaderCompiler::CompileSPIRV()
     {
+#if 0
         using namespace Diligent;
         ShaderCreateInfo ci;
         ci.Desc.Name = desc_.name_.c_str();
@@ -139,6 +140,8 @@ namespace Urho3D
 
         memcpy(byteCode_.data(), byteCode.data(), byteCodeLength);
         return byteCode_.size() > 0;
+#endif
+        return false;
     }
 
     bool ShaderCompiler::CompileGLSL()
