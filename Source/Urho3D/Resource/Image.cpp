@@ -925,11 +925,11 @@ bool Image::SaveFile(const FileIdentifier& fileName) const
 {
     // TODO(vfs): This function can save only to the host filesystem.
     const ea::string& absoluteFileName = fileName.fileName_;
-    if (fileName.scheme_ != "file")
-    {
-        URHO3D_LOGERROR("Can not save image {}", fileName.ToUri());
-        return false;
-    }
+//    if (fileName.scheme_ != "file")
+//    {
+//        URHO3D_LOGERROR("Can not save image {}", fileName.ToUri());
+//        return false;
+//    }
 
     auto fs = GetSubsystem<FileSystem>();
     if (!fs->CreateDirsRecursive(GetPath(absoluteFileName)))
@@ -1338,9 +1338,10 @@ bool Image::SavePNG(const ea::string& fileName) const
 {
     URHO3D_PROFILE("SaveImagePNG");
 
-    File outFile(context_, fileName, FILE_WRITE);
-    if (outFile.IsOpen())
-        return Image::Save(outFile); // Save uses PNG format
+    auto vfs = GetSubsystem<VirtualFileSystem>();
+    AbstractFilePtr outFile = vfs->OpenFile(fileName, FILE_WRITE);
+    if (outFile)
+        return Image::Save(*outFile); // Save uses PNG format
     else
         return false;
 }
